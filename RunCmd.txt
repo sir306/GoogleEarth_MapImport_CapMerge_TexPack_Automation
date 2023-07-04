@@ -1,0 +1,1 @@
+"C:\**Path to blender exe **\blender.exe" "C:\***path to blend file***\.blend"  --background --python "C:\***path to script file***\Scripts\import_merge_pack_textures_join.py"
