@@ -24,9 +24,7 @@ _As this is my first official public pre-release solution into a Blender Python 
 
 ## This script is in the pre-release stage so issues and bugs may be present or unaccounted for
 **However I have conducted extensive testing on it and have only found one known bug, and is stable to use for most cases**
-
-In the Image below you can see the capture is about to take a capture from a U.S. Navy source and will cause Maps Model Importer to fail
-![image](https://github.com/sir306/GoogleEarth_MapImport_CapMerge_TexPack_Automation/assets/40708936/95dfbca7-9b7d-4154-b633-3c26666fabf8)
+Currently if the imported capture was taken during Google still loading the area it will not contain all the information it needs, it will cause the Maps Model Importer to fail and exit early, currently implementing an error catch for these occasions.
 
 A Link to this example has been provided:
 [](url)https://earth.google.com/web/@-43.55529439,172.74939961,3.19291048a,808.72012098d,35y,156.51603316h,65.97568547t,0r
