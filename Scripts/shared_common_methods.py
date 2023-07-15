@@ -123,10 +123,6 @@ def export_model_to_fbx(col_name: str, export_file_path: str):
 
     bpy.ops.mesh.select_all(action='SELECT')
 
-    bpy.ops.mesh.smooth_normals(factor=0.5)
-
-    bpy.ops.mesh.set_normals_from_faces(keep_sharp=False)
-
     bpy.ops.mesh.select_all(action='DESELECT')
 
     _ = set_context_mode_get_current('OBJECT')
@@ -142,8 +138,6 @@ def export_model_to_fbx(col_name: str, export_file_path: str):
         if child_layer.name == col_name:
             export_layer_col = child_layer
             break
-
-    bpy.ops.object.origin_set(type='ORIGIN_CENTER_OF_MASS', center='MEDIAN')
 
     # set active layer collection
     bpy.context.view_layer.active_layer_collection = export_layer_col
@@ -198,15 +192,15 @@ def remove_doubles_from_obj(obj_name: str, merge_distance: float = 0.0001):
 
 def turn_auto_smooth_on_off(obj_name: str, turn_on_off: bool, auto_smooth_angle: float = 0.523599):
 
-    # turn on or off auto smooth for object
-    bpy.data.meshes[obj_name].use_auto_smooth = turn_on_off
-    bpy.context.object.data.use_auto_smooth = turn_on_off
-
     # if on set angle
     if turn_on_off:
         bpy.data.meshes[obj_name].auto_smooth_angle = auto_smooth_angle
 
     else:
+        bpy.ops.mesh.customdata_custom_splitnormals_clear()
+        # turn on or off auto smooth for object
+        bpy.data.meshes[obj_name].use_auto_smooth = turn_on_off
+        bpy.context.object.data.use_auto_smooth = turn_on_off
         # setting to 0 turns it off as well, during no data being present from imports or duplicates inside of script
         # turning off can cause the smoothing to still be present
         bpy.data.meshes[obj_name].auto_smooth_angle = 0.0
@@ -248,7 +242,7 @@ def set_context_mode_get_current(mode: str):
     return current_context_mode
 
 
-def create_bm_from_mesh_set_mode_to_object(mesh_name:str):
+def create_bm_from_mesh_set_mode_to_object(mesh_name: str):
 
     # get current context mode and set to object if not
     current_context_mode = set_context_mode_get_current(mode='OBJECT')
@@ -262,7 +256,7 @@ def create_bm_from_mesh_set_mode_to_object(mesh_name:str):
     return bm, current_context_mode
 
 
-def bm_to_mesh_free(bm:bmesh.types.BMesh, mesh_name:str):
+def bm_to_mesh_free(bm: bmesh.types.BMesh, mesh_name: str):
 
     # transfer data back
     bm.to_mesh(bpy.data.objects.get(mesh_name).data)
@@ -270,7 +264,7 @@ def bm_to_mesh_free(bm:bmesh.types.BMesh, mesh_name:str):
     bm.free()
 
 
-def bm_to_mesh_back_to_mode(bm:bmesh.types.BMesh, mode:str, mesh_name:str):
+def bm_to_mesh_back_to_mode(bm: bmesh.types.BMesh, mode: str, mesh_name: str):
 
     bm_to_mesh_free(bm, mesh_name)
 
@@ -279,16 +273,16 @@ def bm_to_mesh_back_to_mode(bm:bmesh.types.BMesh, mode:str, mesh_name:str):
 
 
 def set_origin_to_center(obj_name: str):
-    
+
     # set active object and get previous active
     previous_active_name = set_active_obj(obj_name=obj_name)
 
     # set origin to center
     bpy.ops.object.origin_set(type='GEOMETRY_ORIGIN', center='MEDIAN')
-    
+
     # set previous active back to active
     set_active_obj(obj_name=previous_active_name)
-    
+
     return
 
 

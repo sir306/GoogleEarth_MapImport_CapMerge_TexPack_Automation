@@ -12,17 +12,18 @@ import pathlib
 
 # 8k this means the image will not go over 8192 x 8192 pixels set to 1 for 1024 x 1024
 max_target_image_size = 8
-capture_resolution = 1024 # this is the resolution of the capture image it will be updated in method but is here for backup or manual override
+# this is the resolution of the capture image it will be updated in method but is here for backup or manual override
+capture_resolution = 1024
 shade_flat = True  # set to false if want stock face shading
 remove_doubles_verts = True  # set to false if want to stock import
 merge_distance = 0.0001  # merge distance for remove doubles
-complete_obj_name = 'HighPoly_Model'
+complete_obj_name = 'HighPoly_DEMO'  # name of final object
 
 # this script doesn't use auto smooth by default but if you do want it on set auto_smooth_on_off to True and set the smooth angle to how you like
 auto_smooth_on_off = False
 auto_smooth_angle = 180
-export_model = False
-delete_rdc_files = True
+export_model = True
+should_delete_rdc_files = False
 
 
 def main():
@@ -73,6 +74,8 @@ def main():
 
     turn_auto_smooth_on_off(obj_name=complete_obj_name,
                             turn_on_off=auto_smooth_on_off, auto_smooth_angle=auto_smooth_angle)
+
+    set_origin_to_center(obj_name=complete_obj_name)
 
     if shade_flat:
 
@@ -383,7 +386,7 @@ def import_rdc_file(file: str, name: str, errors_raised: int):
         write_to_file(
             filepath=f"{GENERATED_TEXTS_FILE_PATH}importing_rdc_full_log.txt", line=line)
 
-        if delete_rdc_files:
+        if should_delete_rdc_files:
             delete_rdc_files(file)
 
     except SystemExit as e:
