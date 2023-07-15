@@ -10,18 +10,19 @@ import glob
 import pathlib
 
 
-target_image_size = 8 # this prevents lily text from going over 8192 x 8192 swap 8 with any int value from 1 to 16
-capture_resolution = 1024
+# 8k this means the image will not go over 8192 x 8192 pixels set to 1 for 1024 x 1024
+max_target_image_size = 8
+capture_resolution = 1024 # this is the resolution of the capture image it will be updated in method but is here for backup or manual override
 shade_flat = True  # set to false if want stock face shading
 remove_doubles_verts = True  # set to false if want to stock import
 merge_distance = 0.0001  # merge distance for remove doubles
-complete_obj_name = 'HighPoly_Model' # what should your final lily cap merge be called
+complete_obj_name = 'HighPoly_Model'
 
 # this script doesn't use auto smooth by default but if you do want it on set auto_smooth_on_off to True and set the smooth angle to how you like
 auto_smooth_on_off = False
-auto_smooth_angle = 0.0 # set to 0 by default to ensure auto smooth is off
-export_model = False # do you want to export model as fbx at the end
-delete_rdc_files = False # to delete rdc files after import, set this to true but only do it after you have tested a small amount or backup the rdc files elsewhere
+auto_smooth_angle = 180
+export_model = False
+delete_rdc_files = True
 
 
 def main():
@@ -77,29 +78,23 @@ def main():
 
         shade_face_flat(obj_name=complete_obj_name)
 
-        write_to_file(filepath=f"{LOG_FILE_PATH}",
-                      line="shade_face_flat completed")
-
-        save_file('Saved after shade_face_flat')
+        print_save_log(filepath=f"{LOG_FILE_PATH}",
+                       line="shade_face_flat completed")
 
     if remove_doubles_verts:
 
         remove_doubles_from_obj(
             obj_name=complete_obj_name, merge_distance=merge_distance)
 
-        write_to_file(filepath=f"{LOG_FILE_PATH}",
-                      line="remove_doubles_from_obj completed")
-
-        save_file('Saved after remove_doubles_from_obj')
+        print_save_log(filepath=f"{LOG_FILE_PATH}",
+                       line="remove_doubles_from_obj completed")
 
     if export_model:
         export_model_to_fbx(
             col_name=col_name, export_file_path=f"{EXPORT_FBX_FILE_PATH}{complete_obj_name}.fbx")
 
-        write_to_file(filepath=f"{LOG_FILE_PATH}",
-                      line="export_model_to_fbx completed")
-
-        save_file('Saved after export_model_to_fbx')
+        print_save_log(filepath=f"{LOG_FILE_PATH}",
+                       line="export_model_to_fbx completed")
 
     # update view layer so orphan data can be removed
     # bpy.context.view_layer.update()
@@ -111,14 +106,14 @@ def main():
     # it is quicker to do in editor at this point due to the number of objects and purging at this point will remove all
     # clean_up_data()
 
-    save_file('Saved after remove_empty_collections')
+    print_save_log(filepath=f"{LOG_FILE_PATH}",
+                   line="remove_empty_collections completed")
 
     # set render engine to workbench for speed
     bpy.context.scene.render.engine = "BLENDER_EEVEE"
 
-    print("Script Completed")
-
-    write_to_file(filepath=f"{LOG_FILE_PATH}", line="Script completed")
+    print_save_log(filepath=f"{LOG_FILE_PATH}",
+                   line="Script Completed")
 
 
 def delete_rdc_files(file_path: str):
@@ -147,6 +142,7 @@ def has_texture_packer_perform_pack_ops(main_col):
 
     # main_col = 'col_1' # debug
 
+    # comment these two lines out if you want to override capture size
     global capture_resolution
     capture_resolution = get_max_image_size()
 
@@ -205,7 +201,7 @@ def get_texel_denisty_requirements(area_size: dict):
         print("No dictionary with Total key supplied!")
         return None
 
-    target_image_quality = 1024 * target_image_size
+    target_image_quality = 1024 * max_target_image_size
     total_target_px = target_image_quality * target_image_quality
     capture_texel_density = capture_resolution / 100  # TODO
     current_area_total = area_size["Total"]
@@ -240,21 +236,33 @@ def check_for_plugins():
         # check import_rdc.google_maps exists
         # check bl_idname exists "import_rdc.google_maps"
         if 'MapsModelsImporter' in addon.module:
-            print_save_log(
-                filepath=f"{GENERATED_TEXTS_FILE_PATH}RuntimeError_Addons.txt", line="MapsModelsImporter plugin not installed, please install and try again")
             should_stop = False
 
         # check import_rdc.lily_capture exists
         if "LilyCaptureMerger" in addon.module:
-            print_save_log(
-                filepath=f"{GENERATED_TEXTS_FILE_PATH}RuntimeError_Addons.txt", line="LilyCaptureMerger plugin not installed")
             has_lily_capture_merger = True
 
         # check lily_texture_packer exists
         if "LilyTexturePacker" in addon.module:
-            print_save_log(
-                filepath=f"{GENERATED_TEXTS_FILE_PATH}RuntimeError_Addons.txt", line="LilyTexturePacker plugin not installed")
             has_lily_texture_packer = True
+
+        # if all found break
+        if should_stop == False and has_lily_capture_merger == True and has_lily_texture_packer == True:
+            break
+
+    if should_stop == True:
+        print_save_log(
+            filepath=f"{GENERATED_TEXTS_FILE_PATH}RuntimeError_Addons.txt", line="MapsModelsImporter plugin not installed, please install and try again")
+
+    # check import_rdc.lily_capture exists
+    if has_lily_capture_merger == False:
+        print_save_log(
+            filepath=f"{GENERATED_TEXTS_FILE_PATH}RuntimeError_Addons.txt", line="LilyCaptureMerger plugin not installed")
+
+    # check lily_texture_packer exists
+    if has_lily_texture_packer == False:
+        print_save_log(
+            filepath=f"{GENERATED_TEXTS_FILE_PATH}RuntimeError_Addons.txt", line="LilyTexturePacker plugin not installed")
 
     print_save_log(filepath=f"{LOG_FILE_PATH}",
                    line=f"Completed check_for_plugins, User has MapsModelsImporter : {not should_stop}, LilyCaptureMerger : {has_lily_capture_merger}, LilyTexturePacker : {has_lily_texture_packer}")
@@ -378,7 +386,7 @@ def import_rdc_file(file: str, name: str, errors_raised: int):
         if delete_rdc_files:
             delete_rdc_files(file)
 
-    except Exception as e:
+    except SystemExit as e:
         lines = [
             f"Failed to import file named {name}", f"--- Error Raised: {e} ---"]
 

@@ -60,7 +60,7 @@ def create_material_uv_and_bake(selected_obj_name: str, target_low_poly_obj_name
 
     # create smart uv map
     uv_map_create(image_texture_margin=image_texture_margin,
-                  image_texture_quality=image_texture_quality)
+                  image_texture_quality=image_texture_quality, obj_name=target_low_poly_obj_name)
 
     save_file('Saved File')
 
@@ -307,7 +307,7 @@ def split_mesh_create_uv_material_bake_rejoin(selected_obj_name: str, final_obj_
     bpy.data.objects.get(final_obj_name).data.use_auto_smooth = False
 
     # remove overlap verts from join
-    remove_doubles_from_obj(bpy.data.objects.get(final_obj_name))
+    remove_doubles_from_obj(final_obj_name)
 
     # switch to back to previous mode if not in object
     if (current_context_mode != 'OBJECT'):
@@ -571,7 +571,7 @@ def create_new_material(obj_name: str, image_file_path: str, mat_number: str = 1
     return img, bsdf_node, tex_image_node, new_material
 
 
-def uv_map_create(image_texture_margin, image_texture_quality):
+def uv_map_create(image_texture_margin: int, image_texture_quality: float, obj_name: str):
     """Create a UV Map for duplicate_obj using the smart_project method with a island margin of 0.0001
     """
     # start uv timer
@@ -597,13 +597,22 @@ def uv_map_create(image_texture_margin, image_texture_quality):
     bpy.ops.uv.smart_project(angle_limit=radians(90), margin_method='ADD',
                              island_margin=(image_texture_margin/image_texture_quality), area_weight=0.0, correct_aspect=True, scale_to_bounds=False)
 
-    # while check_uv_map := bpy.ops.uv.select_overlap():
-    #     print("UV Map has Overlaps")
-    #     bpy.ops.uv.mark_seam()
-    #     bpy.ops.mesh.select_all(action='SELECT')
-    #     bpy.ops.uv.smart_project(angle_limit=radians(90), margin_method='ADD',
-    #                              island_margin=(image_texture_margin/image_texture_quality), area_weight=0.0, correct_aspect=True, scale_to_bounds=False)
-    #     bpy.ops.mesh.select_all(action='DESELECT')
+    while check_uv_map := bpy.ops.uv.select_overlap():
+
+        # remove selected faces that are already marked as seams
+        number_of_face_without_seams = get_selected_faces_and_remove_faces_with_seams(
+            obj_name=obj_name)
+
+        if number_of_face_without_seams == 0:
+            break
+        # don't want all to be marked as seams filter someout TODO
+
+        print("UV Map has Overlaps")
+        bpy.ops.uv.mark_seam()
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.uv.smart_project(angle_limit=radians(90), margin_method='ADD',
+                                 island_margin=(image_texture_margin/image_texture_quality), area_weight=0.0, correct_aspect=True, scale_to_bounds=False)
+        bpy.ops.mesh.select_all(action='DESELECT')
 
     print(
         f"\tObject has been UV unwrapped with smart project with settings set to: angle 90 deg, island margin {image_texture_margin / image_texture_quality}, area weight 0.0, correct aspect True and scale to bounds True"
@@ -617,6 +626,51 @@ def uv_map_create(image_texture_margin, image_texture_quality):
     # output uv timer
     print("It Took uv_map_create:", time.strftime(
         "%H hours, %M minutes and %S seconds to Complete\n", time.gmtime(time.time()-uv_time_start)))
+
+
+def return_first_linked_uv_from_selected_faces(obj_name: str):
+    
+    bm, current_context_mode = create_bm_from_mesh_set_mode_to_object(obj_name)
+    remaining_faces = 0
+    for face in bm.faces:
+        count = 0
+        if face.select == False:
+            continue
+
+        for edge in face.edges:
+            if edge.seam:
+                count += 1
+        if count == len(face.edges):
+            face.select = False
+        else:
+            remaining_faces += 1
+
+    bm_to_mesh_back_to_mode(bm, current_context_mode, obj_name)
+
+    
+    return linked_island_border
+
+
+def get_selected_faces_and_remove_faces_with_seams(obj_name: str):
+
+    bm, current_context_mode = create_bm_from_mesh_set_mode_to_object(obj_name)
+    remaining_faces = 0
+    for face in bm.faces:
+        count = 0
+        if face.select == False:
+            continue
+
+        for edge in face.edges:
+            if edge.seam:
+                count += 1
+        if count == len(face.edges):
+            face.select = False
+        else:
+            remaining_faces += 1
+
+    bm_to_mesh_back_to_mode(bm, current_context_mode, obj_name)
+
+    return remaining_faces
 
 
 def error_has_occured(arg0):

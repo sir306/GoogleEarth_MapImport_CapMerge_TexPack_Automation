@@ -248,7 +248,7 @@ def set_context_mode_get_current(mode: str):
     return current_context_mode
 
 
-def create_bm_from_mesh_set_mode_to_object(mesh_name):
+def create_bm_from_mesh_set_mode_to_object(mesh_name:str):
 
     # get current context mode and set to object if not
     current_context_mode = set_context_mode_get_current(mode='OBJECT')
@@ -262,7 +262,7 @@ def create_bm_from_mesh_set_mode_to_object(mesh_name):
     return bm, current_context_mode
 
 
-def bm_to_mesh_free(bm, mesh_name):
+def bm_to_mesh_free(bm:bmesh.types.BMesh, mesh_name:str):
 
     # transfer data back
     bm.to_mesh(bpy.data.objects.get(mesh_name).data)
@@ -270,7 +270,7 @@ def bm_to_mesh_free(bm, mesh_name):
     bm.free()
 
 
-def bm_to_mesh_back_to_mode(bm, mode, mesh_name):
+def bm_to_mesh_back_to_mode(bm:bmesh.types.BMesh, mode:str, mesh_name:str):
 
     bm_to_mesh_free(bm, mesh_name)
 
@@ -278,8 +278,17 @@ def bm_to_mesh_back_to_mode(bm, mode, mesh_name):
     bpy.ops.object.mode_set(mode=mode)
 
 
-def set_origin_to_center(obj: bpy.types.Object):
+def set_origin_to_center(obj_name: str):
+    
+    # set active object and get previous active
+    previous_active_name = set_active_obj(obj_name=obj_name)
 
+    # set origin to center
+    bpy.ops.object.origin_set(type='GEOMETRY_ORIGIN', center='MEDIAN')
+    
+    # set previous active back to active
+    set_active_obj(obj_name=previous_active_name)
+    
     return
 
 
