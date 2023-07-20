@@ -7,6 +7,9 @@ LOG_FOLDER_PATH = 'C:\\****INPUT FILE PATH YOU WANT****\\GeneratedText\\log\\'
 # import path to rdc files THIS MUST BE EXACTLY THE SAME AS THE RDC PATH IMPORTANT
 RDC_FILE_PATH = "C:\\****INPUT FILE PATH YOU WANT****\\RDC\\"
 
+# RDC_ERROR_PATH - file path to store problematic rdc files
+RDC_ERROR_PATH = RDC_FILE_PATH + 'ERROR\\'
+
 # debug script path and other generated text to help debug any issues
 GENERATED_TEXTS_FILE_PATH = 'C:\\****INPUT FILE PATH YOU WANT****\\GeneratedText\\'
 

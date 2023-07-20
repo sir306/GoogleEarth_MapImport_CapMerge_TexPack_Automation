@@ -143,7 +143,7 @@ def export_model_to_fbx(col_name: str, export_file_path: str):
     bpy.context.view_layer.active_layer_collection = export_layer_col
 
     bpy.ops.export_scene.fbx(filepath=export_file_path, use_active_collection=True, use_mesh_modifiers=True, mesh_smooth_type='FACE',
-                             use_mesh_edges=True, use_tspace=True, use_triangles=True, path_mode='ABSOLUTE', embed_textures=True, axis_forward='X', axis_up='Z')
+                             use_mesh_edges=True, use_tspace=True, use_triangles=True, path_mode='COPY', embed_textures=True, axis_forward='X', axis_up='Z')
 
     set_context_mode_get_current(current_context)
     return
@@ -276,9 +276,13 @@ def set_origin_to_center(obj_name: str):
 
     # set active object and get previous active
     previous_active_name = set_active_obj(obj_name=obj_name)
+    
+    # select obj
+    bpy.data.objects[obj_name].select_set(True)
 
     # set origin to center
-    bpy.ops.object.origin_set(type='GEOMETRY_ORIGIN', center='MEDIAN')
+    # bpy.ops.object.origin_set(type='GEOMETRY_ORIGIN', center='MEDIAN')
+    bpy.ops.object.origin_set(type='ORIGIN_CENTER_OF_MASS', center='BOUNDS')
 
     # set previous active back to active
     set_active_obj(obj_name=previous_active_name)

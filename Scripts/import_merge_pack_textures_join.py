@@ -1,4 +1,5 @@
 import math
+import shutil
 import time
 import bpy
 import bmesh
@@ -16,20 +17,21 @@ max_target_image_size = 8
 capture_resolution = 1024
 shade_flat = True  # set to false if want stock face shading
 remove_doubles_verts = True  # set to false if want to stock import
-merge_distance = 0.0001  # merge distance for remove doubles
+merge_distance = 0.00001  # merge distance for remove doubles
 complete_obj_name = 'HighPoly_DEMO'  # name of final object
 
 # this script doesn't use auto smooth by default but if you do want it on set auto_smooth_on_off to True and set the smooth angle to how you like
 auto_smooth_on_off = False
 auto_smooth_angle = 180
-export_model = True
-should_delete_rdc_files = False
-
+export_model = False
+should_delete_rdc_files = True
+face_shade_smooth = False # set this to true if you want to shade smooth the faces and resolve issues with Nanite
+vert_smooth_factor = 0.5 # this is the factor for the smooth vertices operation
 
 def main():
 
     file_paths = [GENERATED_TEXTS_FILE_PATH, LOG_FOLDER_PATH,
-                  LILY_IMAGE_FILE_PATH, EXPORT_FBX_FILE_PATH]
+                  LILY_IMAGE_FILE_PATH, EXPORT_FBX_FILE_PATH, RDC_ERROR_PATH]
     check_and_create_file_path(file_paths)
 
     print_save_log(filepath=f"{LOG_FILE_PATH}",
@@ -69,6 +71,14 @@ def main():
         print_save_log(filepath=f"{LOG_FILE_PATH}",
                        line="import_and_lily_capture_merge completed")
 
+    if (
+        main_col == ""
+        or main_col is None
+        or bpy.data.collections[main_col] is None
+    ):
+        print_save_log(filepath=f"{GENERATED_TEXTS_FILE_PATH}RuntimeError.txt", line="No RDC files successfully imported, ending script")
+        return
+
     if has_texture_packer:
         col_name = has_texture_packer_perform_pack_ops(main_col)
 
@@ -77,13 +87,6 @@ def main():
 
     set_origin_to_center(obj_name=complete_obj_name)
 
-    if shade_flat:
-
-        shade_face_flat(obj_name=complete_obj_name)
-
-        print_save_log(filepath=f"{LOG_FILE_PATH}",
-                       line="shade_face_flat completed")
-
     if remove_doubles_verts:
 
         remove_doubles_from_obj(
@@ -91,6 +94,24 @@ def main():
 
         print_save_log(filepath=f"{LOG_FILE_PATH}",
                        line="remove_doubles_from_obj completed")
+
+    # set shading to flat if required
+    if shade_flat:
+
+        shade_face_flat(obj_name=complete_obj_name)
+
+        print_save_log(filepath=f"{LOG_FILE_PATH}",
+                       line="shade_face_flat completed")
+
+    # smooth face normals and vertices
+    if face_shade_smooth:
+
+        # smoothes vector normals
+        bpy.ops.mesh.smooth_normals(factor=vert_smooth_factor)
+
+        # shade smooth faces this will contridict the shade flat above but it is required for nanite to work correctly
+        bpy.ops.mesh.faces_shade_smooth()
+
 
     if export_model:
         export_model_to_fbx(
@@ -191,8 +212,14 @@ def has_texture_packer_perform_pack_ops(main_col):
     print_save_log(filepath=f"{LOG_FILE_PATH}",
                    line="texture_pack_group completed")
 
+    # all textures complete remove redundant import folders
+    remove_all_rdc_import_folders(files=glob.glob(f"{RDC_FILE_PATH}*.rdc"))
+    
+    print_save_log(filepath=f"{LOG_FILE_PATH}",line="Completed remove_all_rdc_import_folders")
+    
     print_save_log(filepath=f"{LOG_FILE_PATH}",
                    line="Completed has_texture_packer_perform_pack_ops")
+    
 
     return result
 
@@ -273,12 +300,70 @@ def check_for_plugins():
     return should_stop, has_lily_capture_merger, has_lily_texture_packer
 
 
+def import_error_handle(error: str, error_type:str, filepath: str, errors_raised: int):
+    
+    print_save_log(
+        filepath=f"{GENERATED_TEXTS_FILE_PATH}import_rdc_error_log.txt", line=f"Error importing {filepath} : {error_type}")
+    print("See import_rdc_error_log.txt for more details")
+    write_to_file(
+        filepath=f"{GENERATED_TEXTS_FILE_PATH}import_rdc_error_log.txt", line=f"Logged Error: {error}")
+    
+    print("Moving RDC file to RDC_ERROR folder")
+    _, tail = os.path.split(filepath)
+    filename = os.path.splitext(tail)[0]
+    # check if RDC file exists already in error folder
+    if os.path.exists(RDC_ERROR_PATH + tail):
+        # if it does delete it
+        os.remove(RDC_ERROR_PATH + tail)
+
+    # move file to error folder
+    shutil.move(filepath, RDC_ERROR_PATH)
+    
+    # find rdc folder and delete it
+    find_rdc_folder_and_remove(filename=filename)
+    
+    errors_raised += 1
+    
+    return False, errors_raised
+
+
+def find_rdc_folder_and_remove(filename:str):
+    
+    # get all folders from RDC folder
+    rdc_import_folders = os.listdir(RDC_FILE_PATH)
+    
+    for folder in rdc_import_folders:
+        if filename in folder:
+            remove_rdc_folder(folder_path=RDC_FILE_PATH + folder)
+            print(f"Found and Removed folder {folder}")
+            return
+    
+    return # TODO add error handle for not finding folder
+
+
+def remove_all_rdc_import_folders(files: list[str]):
+    
+    for filepath in files:
+        _, tail = os.path.split(filepath)
+        filename = os.path.splitext(tail)[0]
+        find_rdc_folder_and_remove(filename=filename)
+        
+
+def remove_rdc_folder(folder_path: str):
+   
+    # check if folder exists
+    if os.path.exists(folder_path):
+        # if it does delete it
+        shutil.rmtree(folder_path)
+
+
 def import_and_lily_capture_merge(files: list[str]):
 
     start_time = time.time()
     errors_raised = 0
 
     master_col = bpy.context.scene.collection
+    main_col = ""
 
     print_save_log(
         filepath=f"{GENERATED_TEXTS_FILE_PATH}importing_rdc_full_log.txt", line=f"Starting RDC Imports, Number of files to import: {len(files)}")
@@ -295,12 +380,11 @@ def import_and_lily_capture_merge(files: list[str]):
 
         my_col = create_col(master_col, col_name=col_name)
 
-        print(f"Attempting import file named {tail}")
-        errors_raised = import_rdc_file(
-            file=f, name=tail, errors_raised=errors_raised)
+        successful_import = False
 
-        bpy.data.collections[col_name].hide_viewport = True
-        my_col.hide_viewport = True
+        print(f"Attempting import file named {tail}")
+        successful_import, errors_raised = attempt_import_of_rdc_file(
+            file=f, name=tail, errors_raised=errors_raised)
 
         # update progress
         current_progress = i / len(files) * 100
@@ -308,22 +392,43 @@ def import_and_lily_capture_merge(files: list[str]):
         wm.progress_update(current_progress)
         print(f"Current progress for import is: {current_progress}%")
 
-        if i == 1:
+        
+        if successful_import and main_col == "" and i - errors_raised == 1:
+            # first successful import and is only one needed to be hidden needs to be hidden for performance as sequential imports will be merged
+            bpy.data.collections[col_name].hide_viewport = True
+            my_col.hide_viewport = True
+            # set main col to this col as it will be the first one merged and is the first successful import
+            main_col = col_name
             continue
 
-        print_save_log(filepath=f"{GENERATED_TEXTS_FILE_PATH}import_and_lily_capture_merge.txt",
-                       line=f"Merging current imports, to prevent memory issues, this may take a while, current progress for all imports is {current_progress}%")
-        layer_col = bpy.context.view_layer.layer_collection
-        # DESELECT ALL OBJS
-        bpy.ops.object.select_all(action='DESELECT')
-        main_col = lily_capture_merger_call(layer_col=layer_col)
+        if successful_import:
+            print_save_log(filepath=f"{GENERATED_TEXTS_FILE_PATH}import_and_lily_capture_merge.txt",
+                        line=f"Merging current imports, to prevent memory issues, this may take a while, current progress for all imports is {current_progress}%")
+            layer_col = bpy.context.view_layer.layer_collection
+            # DESELECT ALL OBJS
+            bpy.ops.object.select_all(action='DESELECT')
+            main_col = lily_capture_merger_call(layer_col=layer_col)
+
+        else:
+            failed_import_objs = bpy.data.collections[col_name].objects
+            if len(failed_import_objs) > 0:
+
+                print_save_log(filepath=f"{GENERATED_TEXTS_FILE_PATH}import_and_lily_capture_merge.txt",line=f"Detected objects from failed import, removing objects, number of objects to remove: {len(failed_import_objs)}")
+
+                for obj in failed_import_objs:
+                    del obj
+                    
+            # remove empty collections
+            remove_empty_collections()
+
 
     # end progress
     wm.progress_end()
 
     print_save_log(
-        filepath=f"{GENERATED_TEXTS_FILE_PATH}importing_rdc_full_log.txt", lines=["Imports have been completed.", f"It took {time.time() - start_time} seconds to complete and import {len(files)} number of files ", f"There were {errors_raised} errors raised during the import process."])
+        filepath=f"{GENERATED_TEXTS_FILE_PATH}importing_rdc_full_log.txt", lines=["Imports have been completed.", f"It took {time.time() - start_time} seconds to complete.",f"Total number of RDC files: {len(files)}",f"Total Successful Imports: {len(files)-errors_raised}", f"Number of Unsuccessful Imports: {errors_raised}"])
 
+    # return main col or col_1 if no merges
     return main_col
 
 
@@ -350,8 +455,7 @@ def import_all_rdc_files_no_merge(files: list[str]):
         my_col = create_col(master_col, col_name=col_name)
 
         print(f"Attempting import file named {tail}")
-
-        errors_raised = import_rdc_file(
+        _, errors_raised = attempt_import_of_rdc_file(
             file=f, name=tail, errors_raised=errors_raised)
 
         bpy.data.collections[col_name].hide_viewport = True
@@ -373,35 +477,41 @@ def import_all_rdc_files_no_merge(files: list[str]):
     return 'col_1'
 
 
-def import_rdc_file(file: str, name: str, errors_raised: int):
+def attempt_import_of_rdc_file(file: str, name: str, errors_raised: int):
     try:
-        bpy.ops.import_rdc.google_maps(
-            filepath=(file), filter_glob=".rdc", max_blocks=-1)
-
-        line = f"Successfully imported file named {name}, now hiding"
-
-        print_save_log(filepath=f"{GENERATED_TEXTS_FILE_PATH}successful_import.txt",
-                       line=line)
-
-        write_to_file(
-            filepath=f"{GENERATED_TEXTS_FILE_PATH}importing_rdc_full_log.txt", line=line)
-
-        if should_delete_rdc_files:
-            delete_rdc_files(file)
-
+        
+        return import_rdc_file(file, name, errors_raised)
+    
+    except RuntimeError as e:
+        
+        return import_error_handle(e, "Runtime Error", file, errors_raised)
+    
     except SystemExit as e:
-        lines = [
-            f"Failed to import file named {name}", f"--- Error Raised: {e} ---"]
 
-        print_save_log(
-            filepath=f"{GENERATED_TEXTS_FILE_PATH}unsuccessful_import.txt", lines=lines)
+        return import_error_handle("SystemExit Error", e, file, errors_raised)
+    
+    except Exception as e:
 
-        write_to_file(
-            filepath=f"{GENERATED_TEXTS_FILE_PATH}importing_rdc_full_log.txt", lines=lines)
+        return import_error_handle("Unknown Error", e, file, errors_raised)
 
-        errors_raised += 1
 
-    return errors_raised
+def import_rdc_file(file: str, name: str, errors_raised: int):
+    # bpy.ops.import_rdc.google_maps(
+    #     filepath=(file), filter_glob=".rdc", max_blocks=-1, use_experimental=True)
+    bpy.ops.import_rdc.google_maps(
+        filepath=(file), filter_glob=".rdc", max_blocks=-1)
+    line = f"Successfully imported file named {name}, now hiding"
+
+    print_save_log(filepath=f"{GENERATED_TEXTS_FILE_PATH}successful_import.txt",
+                   line=line)
+
+    write_to_file(
+        filepath=f"{GENERATED_TEXTS_FILE_PATH}importing_rdc_full_log.txt", line=line)
+
+    if should_delete_rdc_files:
+        delete_rdc_files(file)
+
+    return True, errors_raised
 
 
 def lily_capture_merger_call(layer_col):
@@ -409,16 +519,19 @@ def lily_capture_merger_call(layer_col):
     # layer_col_children[0] returns a tuple list ('col_1', bpy.data.scenes['Scene']...LayerCollection)
     layer_col_children = layer_col.children.items()
     print("Starting Lily Capture Merges on collections")
-
+    
+    # get first col name from layer to use as parent
+    first_col_name = layer_col_children[0][0]
+    
     # loop over children as list is in tuple with the name as key and the layer collection as struct we can seperate out k to get key name and v to the layer collection itself
     for k, v in layer_col_children:
 
-        # as i want col_1 to be parent best to skip this after unhiding it and ref in code by name if you know it or assign a val to the first instance
-        if (k == layer_col_children[0][0]):
+        # as i want first col_i to be parent best to skip this after unhiding it and ref in code by name if you know it or assign a val to the first instance
+        if (k == first_col_name):
             bpy.data.collections[k].hide_viewport = False
             v.hide_viewport = False
             continue
-        print(f"Merging collection {k} with col_1")
+        print(f"Merging collection {k} with {first_col_name}")
         # print(k) # returns col_1
         # print(v) # returns <bpy_struct, LayerCollection("col_1") at 0x000001D630AF96C8>
 
@@ -430,10 +543,10 @@ def lily_capture_merger_call(layer_col):
             # select first object
             bpy.data.collections.get(k).objects[0].select_set(True)
 
-        if bpy.data.collections.get('col_1').objects:
+        if bpy.data.collections.get(first_col_name).objects:
             # set first object as active
             bpy.context.view_layer.objects.active = bpy.data.collections.get(
-                layer_col_children[0][0]).objects[0]
+                first_col_name).objects[0]
 
         # merge objects
         bpy.ops.object.lily_capture_merger()
@@ -443,7 +556,7 @@ def lily_capture_merger_call(layer_col):
             bpy.data.collections.get(k).objects[0].select_set(False)
 
         move_objects_from_one_collection_to_target(bpy.data.collections.get(
-            layer_col_children[0][0]), bpy.data.collections.get(k).objects)
+            first_col_name), bpy.data.collections.get(k).objects)
         # bpy.context.scene.collection.children.get(layer_col_children[0][0]) -- case data.collections does not work with link
 
         print(f"Completed collection merge {k} with col_1")
@@ -454,7 +567,7 @@ def lily_capture_merger_call(layer_col):
     print("Lily capture merger has completed")
 
     # return the collection name holding all objects
-    return layer_col_children[0][0]
+    return first_col_name
 
 
 def rename_objs_and_store_location(obj_col: str):
@@ -769,6 +882,28 @@ def sort_groupings_into_new_col(area_groupings: dict):
     return collection_names
 
 
+def unhide_viewport_and_render_collection(col_name: str):
+    
+    # get layer col
+    layer_col = bpy.context.view_layer.layer_collection
+    
+    # get children col
+    layer_col_children = layer_col.children.items()
+    
+    # loop over children and find col_name and when found unhide
+    for k,v in layer_col_children:
+        
+        if k == col_name:
+            bpy.data.collections[k].hide_viewport = False
+            v.hide_viewport = False
+            
+            # found collection now return
+            return
+        
+    # if not found then print error
+    print_save_log(filepath=f"{GENERATED_TEXTS_FILE_PATH}RuntimeError_Addons.txt", line=f"Could not find collection named {col_name} to unhide")
+    # TODO add error handling for this
+
 def texture_pack_group(col_names: list[str]):
 
     print("\nStarting Lily Texture Packer on collections")
@@ -780,6 +915,10 @@ def texture_pack_group(col_names: list[str]):
     for col in col_names:
 
         print(f"\tCurrent Collection: {col}")
+        
+        # enure col not hidden
+        unhide_viewport_and_render_collection(col_name=col)
+        
 
         objs = bpy.data.collections.get(col).objects
         for ob in objs:

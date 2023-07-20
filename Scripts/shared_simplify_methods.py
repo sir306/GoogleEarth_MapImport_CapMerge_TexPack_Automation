@@ -629,8 +629,9 @@ def uv_map_create(image_texture_margin: int, image_texture_quality: float, obj_n
 
 
 def return_first_linked_uv_from_selected_faces(obj_name: str):
-    
+
     bm, current_context_mode = create_bm_from_mesh_set_mode_to_object(obj_name)
+    linked_island_border = []
     remaining_faces = 0
     for face in bm.faces:
         count = 0
@@ -647,7 +648,6 @@ def return_first_linked_uv_from_selected_faces(obj_name: str):
 
     bm_to_mesh_back_to_mode(bm, current_context_mode, obj_name)
 
-    
     return linked_island_border
 
 
